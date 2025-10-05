@@ -3,8 +3,10 @@ import axios from 'axios';
 
 const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated }) => {
   const [mitigationParams, setMitigationParams] = useState({
+    strategy: 'kinetic_impactor', // 'kinetic_impactor', 'gravity_tractor', 'nuclear'
     delta_v: 0.01, // m/s
-    time_before_impact: 365 // days
+    time_before_impact: 365, // days
+    spacecraft_mass: 1000 // kg
   });
   
   const [mitigationResult, setMitigationResult] = useState(null);
@@ -14,7 +16,7 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
   const handleMitigationChange = (param, value) => {
     setMitigationParams(prev => ({
       ...prev,
-      [param]: parseFloat(value) || 0
+      [param]: param === 'strategy' ? value : parseFloat(value) || 0
     }));
   };
 
@@ -44,6 +46,38 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
     }
   };
 
+  const getStrategyInfo = (strategy) => {
+    const strategies = {
+      kinetic_impactor: {
+        name: 'Kinetic Impactor',
+        description: 'Spacecraft crashes into asteroid to change velocity',
+        effectiveness: 'Medium',
+        cost: 'Low',
+        readiness: 'Ready now',
+        icon: '🚀'
+      },
+      gravity_tractor: {
+        name: 'Gravity Tractor', 
+        description: 'Spacecraft uses gravity to slowly pull asteroid',
+        effectiveness: 'Low',
+        cost: 'High',
+        readiness: 'Near future',
+        icon: '🛰️'
+      },
+      nuclear: {
+        name: 'Nuclear Deflection',
+        description: 'Nuclear explosion near asteroid surface',
+        effectiveness: 'High', 
+        cost: 'Medium',
+        readiness: 'Emergency only',
+        icon: '☢️'
+      }
+    };
+    return strategies[strategy] || strategies.kinetic_impactor;
+  };
+
+  const currentStrategy = getStrategyInfo(mitigationParams.strategy);
+
   return (
     <div style={{ 
       marginTop: '2rem', 
@@ -54,6 +88,44 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
     }}>
       <h3 style={{ color: '#00d4ff', marginBottom: '1rem' }}>🛡️ Planetary Defense</h3>
       
+      {/* Strategy Selection */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <label style={{ color: '#88ffff', display: 'block', marginBottom: '0.5rem' }}>
+          Defense Strategy:
+        </label>
+        <select
+          value={mitigationParams.strategy}
+          onChange={(e) => handleMitigationChange('strategy', e.target.value)}
+          style={{
+            width: '100%',
+            padding: '0.5rem',
+            background: 'rgba(0, 0, 0, 0.5)',
+            color: 'white',
+            border: '1px solid #00d4ff',
+            borderRadius: '5px'
+          }}
+        >
+          <option value="kinetic_impactor">🚀 Kinetic Impactor (DART Mission)</option>
+          <option value="gravity_tractor">🛰️ Gravity Tractor</option>
+          <option value="nuclear">☢️ Nuclear Deflection</option>
+        </select>
+        
+        {/* Strategy Info */}
+        <div style={{
+          background: 'rgba(0, 212, 255, 0.1)',
+          padding: '0.75rem',
+          borderRadius: '5px',
+          marginTop: '0.5rem',
+          fontSize: '0.9rem'
+        }}>
+          <div><strong>{currentStrategy.icon} {currentStrategy.name}</strong></div>
+          <div>{currentStrategy.description}</div>
+          <div>Effectiveness: {currentStrategy.effectiveness} • Cost: {currentStrategy.cost}</div>
+          <div>Readiness: {currentStrategy.readiness}</div>
+        </div>
+      </div>
+
+      {/* Strategy-specific parameters */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         <div>
           <label style={{ color: '#88ffff', display: 'block', marginBottom: '0.5rem' }}>
@@ -76,15 +148,32 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
           </label>
           <input
             type="range"
-            min="1"
+            min="30"
             max="1000"
-            step="1"
+            step="10"
             value={mitigationParams.time_before_impact}
             onChange={(e) => handleMitigationChange('time_before_impact', e.target.value)}
             style={{ width: '100%' }}
           />
         </div>
       </div>
+
+      {mitigationParams.strategy === 'kinetic_impactor' && (
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ color: '#88ffff', display: 'block', marginBottom: '0.5rem' }}>
+            Spacecraft Mass: {mitigationParams.spacecraft_mass} kg
+          </label>
+          <input
+            type="range"
+            min="100"
+            max="10000"
+            step="100"
+            value={mitigationParams.spacecraft_mass}
+            onChange={(e) => handleMitigationChange('spacecraft_mass', e.target.value)}
+            style={{ width: '100%' }}
+          />
+        </div>
+      )}
       
       <button 
         onClick={runMitigationSimulation}
@@ -102,7 +191,7 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
           opacity: loading ? 0.7 : 1
         }}
       >
-        {loading ? '🔄 Calculating...' : '🚀 Apply Deflection'}
+        {loading ? '🔄 Calculating Deflection...' : `🚀 Deploy ${currentStrategy.name}`}
       </button>
       
       {error && (
@@ -133,7 +222,9 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
               fontWeight: 'bold',
               marginBottom: '1rem'
             }}>
-              ✅ SUCCESS! Impact avoided by {mitigationResult.miss_distance_km?.toFixed(2)} km
+              ✅ MISSION SUCCESS!<br />
+              Impact avoided by {mitigationResult.miss_distance_km?.toFixed(2)} km<br />
+              <small>Earth is safe! 🌍</small>
             </div>
           ) : (
             <div style={{
@@ -144,16 +235,29 @@ const MitigationPanel = ({ parameters, impactLocation, onDeflectionCalculated })
               border: '1px solid #ffff00',
               marginBottom: '1rem'
             }}>
-              ⚠️ Partial deflection: {mitigationResult.deflection_distance_km?.toFixed(2)} km
-              <br />
-              New impact point calculated
+              ⚠️ Partial deflection achieved<br />
+              Miss distance: {mitigationResult.miss_distance_km?.toFixed(2)} km<br />
+              <small>Larger deflection needed for complete safety</small>
             </div>
           )}
           
-          <div style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
-            <div>Deflection Distance: {mitigationResult.deflection_distance_km?.toFixed(2)} km</div>
-            <div>Δv Applied: {mitigationResult.delta_v_applied} m/s</div>
-            <div>Time Before Impact: {mitigationResult.time_before_impact_days} days</div>
+          <div style={{ 
+            background: 'rgba(0, 0, 0, 0.3)',
+            padding: '1rem',
+            borderRadius: '5px',
+            fontSize: '0.9rem'
+          }}>
+            <div><strong>Strategy:</strong> {currentStrategy.name}</div>
+            <div><strong>Δv Applied:</strong> {mitigationResult.delta_v_applied} m/s</div>
+            <div><strong>Time Before Impact:</strong> {mitigationResult.time_before_impact_days} days</div>
+            <div><strong>Deflection Distance:</strong> {mitigationResult.deflection_distance_km?.toFixed(2)} km</div>
+            {mitigationResult.new_impact && (
+              <div>
+                <strong>New Impact Point:</strong><br />
+                Lat: {mitigationResult.new_impact.lat?.toFixed(4)}°, 
+                Lon: {mitigationResult.new_impact.lon?.toFixed(4)}°
+              </div>
+            )}
           </div>
         </div>
       )}
